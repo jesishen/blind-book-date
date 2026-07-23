@@ -1,9 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Book } from "@/types/book";
 import { BookSlot } from "./BookSlot";
 import { fetchCoverUrl } from "@/lib/googleBooks";
+
+// Free-tier Gemini allows 5 requests/minute, i.e. one every 12 seconds.
+// A little buffer keeps us safely under that instead of racing it.
+const NORMAL_COOLDOWN_MS = 13000;
+const RATE_LIMIT_COOLDOWN_MS = 30000;
 
 export function BlindDate({
   books,
@@ -19,13 +24,23 @@ export function BlindDate({
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [coverLoading, setCoverLoading] = useState(false);
   const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (cooldownUntil === null) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [cooldownUntil]);
+
+  const cooldownRemaining =
+    cooldownUntil !== null ? Math.max(0, Math.ceil((cooldownUntil - now) / 1000)) : 0;
+  const onCooldown = cooldownRemaining > 0;
 
   function pickRandomBook(): Book | null {
     if (books.length === 0) return null;
     const notSeen = books.filter((b) => !seenIds.has(b.id));
 
-    // Once every book has come up this cycle, start a fresh cycle
-    // rather than getting stuck with an empty pool.
     if (notSeen.length === 0) {
       setSeenIds(new Set());
       return books[Math.floor(Math.random() * books.length)];
@@ -50,6 +65,8 @@ export function BlindDate({
   }
 
   async function handleReroll() {
+    if (onCooldown) return;
+
     const picked = pickRandomBook();
     if (!picked) return;
 
@@ -59,14 +76,18 @@ export function BlindDate({
     setCoverUrl(null);
     setCurrent(picked);
     setLoading(true);
+    setCooldownUntil(Date.now() + NORMAL_COOLDOWN_MS);
 
     try {
       const keywords = await fetchTeaser(picked);
       setCurrent({ ...picked, teaserKeywords: keywords });
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to generate teaser"
-      );
+      const message =
+        err instanceof Error ? err.message : "Failed to generate teaser";
+      setError(message);
+      if (message.toLowerCase().includes("rate-limited")) {
+        setCooldownUntil(Date.now() + RATE_LIMIT_COOLDOWN_MS);
+      }
     } finally {
       setLoading(false);
     }
@@ -88,10 +109,10 @@ export function BlindDate({
       <div className="flex flex-col items-center gap-3">
         <button
           onClick={handleReroll}
-          disabled={books.length === 0}
+          disabled={books.length === 0 || onCooldown}
           className="rounded-full bg-amber-800 px-6 py-3 text-base font-medium text-white transition hover:bg-amber-900 disabled:opacity-50"
         >
-          Surprise me
+          {onCooldown ? `Wait ${cooldownRemaining}s…` : "Surprise me"}
         </button>
         {error && <p className="text-sm text-red-600">{error}</p>}
       </div>
@@ -124,10 +145,10 @@ export function BlindDate({
         )}
         <button
           onClick={handleReroll}
-          disabled={loading}
+          disabled={loading || onCooldown}
           className="rounded-full border border-amber-800/40 px-5 py-2 text-sm font-medium text-amber-900 transition hover:bg-amber-50 disabled:opacity-50"
         >
-          Reroll
+          {onCooldown ? `Wait ${cooldownRemaining}s…` : "Reroll"}
         </button>
       </div>
     </div>
