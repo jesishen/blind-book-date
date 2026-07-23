@@ -44,9 +44,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ keywords });
   } catch (err) {
     console.error("generate-teaser route error:", err);
-    return NextResponse.json(
-      { error: "Failed to generate teaser from the LLM. Please try again." },
-      { status: 502 }
-    );
+    const message =
+      err instanceof Error
+        ? err.message
+        : "Failed to generate teaser from the LLM. Please try again.";
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 }
