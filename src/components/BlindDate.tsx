@@ -1,14 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Book } from "@/types/book";
 import { BookSlot } from "./BookSlot";
 import { fetchCoverUrl } from "@/lib/googleBooks";
-
-// Free-tier Gemini allows 5 requests/minute, i.e. one every 12 seconds.
-// A little buffer keeps us safely under that instead of racing it.
-const NORMAL_COOLDOWN_MS = 13000;
-const RATE_LIMIT_COOLDOWN_MS = 30000;
 
 export function BlindDate({
   books,
@@ -23,30 +18,10 @@ export function BlindDate({
   const [error, setError] = useState<string | null>(null);
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [coverLoading, setCoverLoading] = useState(false);
-  const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
-  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
-  const [now, setNow] = useState(Date.now());
-
-  useEffect(() => {
-    if (cooldownUntil === null) return;
-    const interval = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(interval);
-  }, [cooldownUntil]);
-
-  const cooldownRemaining =
-    cooldownUntil !== null ? Math.max(0, Math.ceil((cooldownUntil - now) / 1000)) : 0;
-  const onCooldown = cooldownRemaining > 0;
 
   function pickRandomBook(): Book | null {
     if (books.length === 0) return null;
-    const notSeen = books.filter((b) => !seenIds.has(b.id));
-
-    if (notSeen.length === 0) {
-      setSeenIds(new Set());
-      return books[Math.floor(Math.random() * books.length)];
-    }
-
-    return notSeen[Math.floor(Math.random() * notSeen.length)];
+    return books[Math.floor(Math.random() * books.length)];
   }
 
   async function fetchTeaser(book: Book): Promise<string[]> {
@@ -64,30 +39,24 @@ export function BlindDate({
     return data.keywords as string[];
   }
 
-  async function handleReroll() {
-    if (onCooldown) return;
-
+  async function handleSurpriseMe() {
+    if (loading) return;
     const picked = pickRandomBook();
     if (!picked) return;
 
-    setSeenIds((prev) => new Set(prev).add(picked.id));
     setError(null);
     setRevealed(false);
     setCoverUrl(null);
     setCurrent(picked);
     setLoading(true);
-    setCooldownUntil(Date.now() + NORMAL_COOLDOWN_MS);
 
     try {
       const keywords = await fetchTeaser(picked);
       setCurrent({ ...picked, teaserKeywords: keywords });
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to generate teaser";
-      setError(message);
-      if (message.toLowerCase().includes("rate-limited")) {
-        setCooldownUntil(Date.now() + RATE_LIMIT_COOLDOWN_MS);
-      }
+      setError(
+        err instanceof Error ? err.message : "Failed to generate teaser"
+      );
     } finally {
       setLoading(false);
     }
@@ -108,11 +77,11 @@ export function BlindDate({
     return (
       <div className="flex flex-col items-center gap-3">
         <button
-          onClick={handleReroll}
-          disabled={books.length === 0 || onCooldown}
+          onClick={handleSurpriseMe}
+          disabled={books.length === 0}
           className="rounded-full bg-amber-800 px-6 py-3 text-base font-medium text-white transition hover:bg-amber-900 disabled:opacity-50"
         >
-          {onCooldown ? `Wait ${cooldownRemaining}s…` : "Surprise me"}
+          Surprise me
         </button>
         {error && <p className="text-sm text-red-600">{error}</p>}
       </div>
@@ -134,23 +103,20 @@ export function BlindDate({
 
       {loading && <p className="text-sm text-stone-500">Generating teaser…</p>}
 
-      <div className="flex gap-3">
-        {!revealed && ready && (
-          <button
-            onClick={handleUnwrap}
-            className="rounded-full bg-amber-800 px-5 py-2 text-sm font-medium text-white transition hover:bg-amber-900"
-          >
-            Unwrap
-          </button>
-        )}
+      {!revealed && ready && (
         <button
-          onClick={handleReroll}
-          disabled={loading || onCooldown}
-          className="rounded-full border border-amber-800/40 px-5 py-2 text-sm font-medium text-amber-900 transition hover:bg-amber-50 disabled:opacity-50"
+          onClick={handleUnwrap}
+          className="rounded-full bg-amber-800 px-5 py-2 text-sm font-medium text-white transition hover:bg-amber-900"
         >
-          {onCooldown ? `Wait ${cooldownRemaining}s…` : "Reroll"}
+          Unwrap
         </button>
-      </div>
+      )}
+
+      {revealed && (
+        <p className="text-sm text-stone-500">
+          Reload the page for another blind date.
+        </p>
+      )}
     </div>
   );
 }

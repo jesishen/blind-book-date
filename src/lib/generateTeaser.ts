@@ -2,9 +2,6 @@ import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 import { buildTeaserPrompt } from "./prompts/teaser";
 
-// Slightly more headroom than the prompt asks for, since LLMs occasionally
-// run a phrase a bit long — better to accept it than throw the whole
-// generation away over a few extra characters.
 const TeaserSchema = z.array(z.string().min(3).max(60)).length(3);
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -15,15 +12,6 @@ function stripMarkdownFences(text: string): string {
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/```\s*$/i, "")
     .trim();
-}
-
-// Gemini's free tier returns a 429 with a suggested retryDelay (e.g. "26s")
-// embedded in the error message. Extract it so our retry actually waits
-// long enough instead of immediately re-hitting the same quota wall.
-function parseRetryDelayMs(message: string): number {
-  const match = message.match(/"retryDelay":"(\d+(?:\.\d+)?)s"/);
-  if (match) return Math.ceil(parseFloat(match[1]) * 1000) + 500; // small buffer
-  return 15000; // sensible fallback if we can't parse one
 }
 
 function isRateLimitError(err: unknown): boolean {
@@ -37,15 +25,11 @@ async function callGemini(
   description: string
 ): Promise<string[]> {
   const response = await ai.models.generateContent({
-    // Flash-Lite is built specifically for short, low-latency, simple
-    // tasks like this one — noticeably faster than the full Flash model.
     model: "gemini-flash-lite-latest",
     contents: buildTeaserPrompt(title, author, description),
     config: {
       thinkingConfig: { thinkingBudget: 0 },
       maxOutputTokens: 150,
-      // Ask Gemini to return raw JSON directly, skipping markdown fences
-      // entirely — fewer malformed responses means fewer retries.
       responseMimeType: "application/json",
     },
   });
@@ -74,15 +58,13 @@ export async function generateTeaser(
     } catch (err) {
       lastError = err;
 
-      if (attempt === maxRetries) break;
+      // Don't retry rate-limit errors at all — retrying just spends
+      // another attempt against the same tight quota and makes the
+      // situation worse. Fail immediately and let the client-side
+      // cooldown handle waiting instead.
+      if (isRateLimitError(err)) break;
 
-      if (isRateLimitError(err)) {
-        const msg = err instanceof Error ? err.message : String(err);
-        const delay = parseRetryDelayMs(msg);
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      }
-      // For malformed JSON / validation errors, retry immediately — those
-      // are usually just LLM formatting noise, not a real backoff situation.
+      if (attempt === maxRetries) break;
     }
   }
 
