@@ -15,8 +15,7 @@ Rules:
 - If no description is available, infer a plausible vibe from the title and author's typical style/genre conventions, but stay vague enough to avoid being wrong
 - Think of these like "vibe check" tags a friend would text you before recommending a book blind
 
-Return ONLY a JSON array of 3 strings, nothing else, no markdown formatting, no code fences, no explanation.
+Return a JSON array of exactly 3 strings — nothing else.
 
-Example output format:
-["slow burn feeling", "for rainy afternoons", "will wreck you softly"]`;
+Example: ["slow burn feeling", "for rainy afternoons", "will wreck you softly"]`;
 }
