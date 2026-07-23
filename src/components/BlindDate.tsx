@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Book } from "@/types/book";
 import { BookSlot } from "./BookSlot";
 import { fetchCoverUrl } from "@/lib/googleBooks";
@@ -18,6 +18,7 @@ export function BlindDate({
   const [error, setError] = useState<string | null>(null);
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [coverLoading, setCoverLoading] = useState(false);
+  const hasStarted = useRef(false);
 
   function pickRandomBook(): Book | null {
     if (books.length === 0) return null;
@@ -39,8 +40,7 @@ export function BlindDate({
     return data.keywords as string[];
   }
 
-  async function handleSurpriseMe() {
-    if (loading) return;
+  async function startBlindDate() {
     const picked = pickRandomBook();
     if (!picked) return;
 
@@ -62,6 +62,14 @@ export function BlindDate({
     }
   }
 
+  useEffect(() => {
+    if (books.length > 0 && !hasStarted.current) {
+      hasStarted.current = true;
+      startBlindDate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [books.length]);
+
   async function handleUnwrap() {
     if (!current) return;
     setRevealed(true);
@@ -74,17 +82,10 @@ export function BlindDate({
   }
 
   if (!current) {
-    return (
-      <div className="flex flex-col items-center gap-3">
-        <button
-          onClick={handleSurpriseMe}
-          disabled={books.length === 0}
-          className="rounded-full bg-amber-800 px-6 py-3 text-base font-medium text-white transition hover:bg-amber-900 disabled:opacity-50"
-        >
-          Surprise me
-        </button>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-      </div>
+    return error ? (
+      <p className="text-sm text-red-600">{error}</p>
+    ) : (
+      <p className="text-sm text-stone-500">Choosing your blind date…</p>
     );
   }
 

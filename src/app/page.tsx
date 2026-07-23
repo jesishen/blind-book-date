@@ -2,11 +2,10 @@
 
 import { useToReadList } from "@/hooks/useToReadList";
 import { CsvUpload } from "@/components/CsvUpload";
-import { ToReadList } from "@/components/ToReadList";
 import { BlindDate } from "@/components/BlindDate";
 
 export default function Home() {
-  const { books, importBooks, removeBook, toggleReveal } = useToReadList();
+  const { books, importBooks, toggleReveal } = useToReadList();
 
   function handleImport(imported: typeof books) {
     importBooks(imported);
@@ -29,16 +28,10 @@ export default function Home() {
       {!hasBooks && <CsvUpload onImport={handleImport} />}
 
       {hasBooks && (
-        <>
-          <BlindDate
-            books={books}
-            onMarkRevealed={(id) => toggleReveal(id, true)}
-          />
-
-          <div className="w-full max-w-md">
-            <ToReadList books={books} onRemove={removeBook} />
-          </div>
-        </>
+        <BlindDate
+          books={books}
+          onMarkRevealed={(id) => toggleReveal(id, true)}
+        />
       )}
     </main>
   );
