@@ -25,11 +25,14 @@ async function callGemini(
   description: string
 ): Promise<string[]> {
   const response = await ai.models.generateContent({
+    // Flash-Lite is built specifically for short, low-latency, simple
+    // tasks like this one — noticeably faster than the full Flash model.
     model: "gemini-flash-lite-latest",
     contents: buildTeaserPrompt(title, author, description),
     config: {
-      thinkingConfig: { thinkingBudget: 0 },
       maxOutputTokens: 150,
+      // Ask Gemini to return raw JSON directly, skipping markdown fences
+      // entirely — fewer malformed responses means fewer retries.
       responseMimeType: "application/json",
     },
   });

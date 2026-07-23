@@ -1,17 +1,20 @@
 "use client";
 
+import { useState } from "react";
 import { useToReadList } from "@/hooks/useToReadList";
 import { CsvUpload } from "@/components/CsvUpload";
 import { BlindDate } from "@/components/BlindDate";
 
 export default function Home() {
   const { books, importBooks, toggleReveal } = useToReadList();
+  const [csvVersion, setCsvVersion] = useState(0);
+  const [started, setStarted] = useState(false);
 
   function handleImport(imported: typeof books) {
     importBooks(imported);
+    setCsvVersion((v) => v + 1);
+    setStarted(false);
   }
-
-  const hasBooks = books.length > 0;
 
   return (
     <main className="flex min-h-screen flex-col items-center gap-10 bg-stone-100 px-4 py-10">
@@ -25,12 +28,14 @@ export default function Home() {
         </p>
       </div>
 
-      {!hasBooks && <CsvUpload onImport={handleImport} />}
+      {!started && <CsvUpload onImport={handleImport} />}
 
-      {hasBooks && (
+      {books.length > 0 && (
         <BlindDate
+          key={csvVersion}
           books={books}
           onMarkRevealed={(id) => toggleReveal(id, true)}
+          onStart={() => setStarted(true)}
         />
       )}
     </main>

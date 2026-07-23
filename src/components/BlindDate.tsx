@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Book } from "@/types/book";
 import { BookSlot } from "./BookSlot";
 import { fetchCoverUrl } from "@/lib/googleBooks";
@@ -8,9 +8,11 @@ import { fetchCoverUrl } from "@/lib/googleBooks";
 export function BlindDate({
   books,
   onMarkRevealed,
+  onStart,
 }: {
   books: Book[];
   onMarkRevealed: (id: string) => void;
+  onStart?: () => void;
 }) {
   const [current, setCurrent] = useState<Book | null>(null);
   const [revealed, setRevealed] = useState(false);
@@ -18,7 +20,6 @@ export function BlindDate({
   const [error, setError] = useState<string | null>(null);
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [coverLoading, setCoverLoading] = useState(false);
-  const hasStarted = useRef(false);
 
   function pickRandomBook(): Book | null {
     if (books.length === 0) return null;
@@ -40,10 +41,12 @@ export function BlindDate({
     return data.keywords as string[];
   }
 
-  async function startBlindDate() {
+  async function handleSurpriseMe() {
+    if (loading) return;
     const picked = pickRandomBook();
     if (!picked) return;
 
+    onStart?.();
     setError(null);
     setRevealed(false);
     setCoverUrl(null);
@@ -62,15 +65,7 @@ export function BlindDate({
     }
   }
 
-  useEffect(() => {
-    if (books.length > 0 && !hasStarted.current) {
-      hasStarted.current = true;
-      startBlindDate();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [books.length]);
-
-  async function handleUnwrap() {
+  async function handleUnwrapComplete() {
     if (!current) return;
     setRevealed(true);
     onMarkRevealed(current.id);
@@ -82,10 +77,17 @@ export function BlindDate({
   }
 
   if (!current) {
-    return error ? (
-      <p className="text-sm text-red-600">{error}</p>
-    ) : (
-      <p className="text-sm text-stone-500">Choosing your blind date…</p>
+    return (
+      <div className="flex flex-col items-center gap-3">
+        <button
+          onClick={handleSurpriseMe}
+          disabled={books.length === 0 || loading}
+          className="rounded-full bg-amber-800 px-6 py-3 text-base font-medium text-white transition hover:bg-amber-900 disabled:opacity-50"
+        >
+          {loading ? "Choosing…" : "Surprise me"}
+        </button>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+      </div>
     );
   }
 
@@ -97,26 +99,16 @@ export function BlindDate({
 
       <BookSlot
         book={current}
-        revealed={revealed}
+        ready={ready}
         coverUrl={coverUrl}
         coverLoading={coverLoading}
+        onUnwrapComplete={handleUnwrapComplete}
       />
 
       {loading && <p className="text-sm text-stone-500">Generating teaser…</p>}
 
-      {!revealed && ready && (
-        <button
-          onClick={handleUnwrap}
-          className="rounded-full bg-amber-800 px-5 py-2 text-sm font-medium text-white transition hover:bg-amber-900"
-        >
-          Unwrap
-        </button>
-      )}
-
       {revealed && (
-        <p className="text-sm text-stone-500">
-          Reload the page for another blind date.
-        </p>
+        <p className="text-sm text-stone-500">That&rsquo;s your book!</p>
       )}
     </div>
   );
